@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Gestión de Interlaboratorios</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <div class="container mt-4">
+    <h2 class="text-center">Gestión de Interlaboratorios</h2>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="alert alert-success mt-3">{{ messages[0] }}</div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="row mt-4">
+      <div class="col-md-6">
+        <h4>Nuevo Interlaboratorio</h4>
+        <form method="post" action="/registrar">
+          <input class="form-control mb-2" name="nombre" placeholder="Nombre del Interlab" required>
+          <input class="form-control mb-2" name="parametros" placeholder="Parámetros" required>
+          <input class="form-control mb-2" name="fecha_entrega" type="date" required>
+          <input class="form-control mb-2" name="analistas" placeholder="Analistas" required>
+          <select class="form-control mb-2" name="estado" required>
+            <option value="Reportado">Reportado</option>
+            <option value="Sin reportar">Sin reportar</option>
+          </select>
+          <button class="btn btn-primary">Guardar</button>
+        </form>
+      </div>
+
+      <div class="col-md-6">
+        <h4>Agregar número celular</h4>
+        <form method="post" action="/agregar_celular">
+          <input class="form-control mb-2" name="numero" placeholder="Número celular" required>
+          <input class="form-control mb-2" name="observaciones" placeholder="Observaciones">
+          <button class="btn btn-success">Agregar</button>
+        </form>
+      </div>
+    </div>
+
+    <hr>
+
+    <h4 class="mt-4">Interlaboratorios Registrados</h4>
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Parámetros</th>
+          <th>Fecha Entrega</th>
+          <th>Analistas</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in interlabs %}
+        <tr>
+          <td>{{ i[1] }}</td>
+          <td>{{ i[2] }}</td>
+          <td>{{ i[3] }}</td>
+          <td>{{ i[4] }}</td>
+          <td>{{ i[5] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h4 class="mt-4">Números celulares</h4>
+    <ul>
+      {% for c in celulares %}
+        <li>{{ c[1] }} - {{ c[2] }}</li>
+      {% endfor %}
+    </ul>
+
+    <h4 class="mt-4">Imagen del Excel Capturada</h4>
+    <img src="{{ imagen_ruta }}?t={{ timestamp }}" alt="Imagen generada del Excel" class="img-fluid">
+
+
+  </div>
+</body>
+</html>
