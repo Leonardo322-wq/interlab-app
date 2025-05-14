@@ -8,3 +8,4 @@ twilio==9.6.1
 schedule==1.2.2
 pywhatkit==5.4
 pytz==2024.2
+plyer==2.1.0
