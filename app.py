@@ -187,7 +187,7 @@ def filtrar_interlaboratorios():
     imagen_ruta = url_for('static', filename='images/macrobalance_image.png')
     timestamp = datetime.now().timestamp()
     return render_template('index.html', interlabs=interlabs, imagen_ruta=imagen_ruta, timestamp=timestamp)
-    
+
 
 
 def ejecutar_tareas_programadas():
@@ -195,8 +195,9 @@ def ejecutar_tareas_programadas():
         schedule.run_pending()
         time.sleep(60)
 
+inicializar_base_de_datos_postgres()
 if __name__ == '__main__':
-    inicializar_base_de_datos_postgres()
+    
     thread = threading.Thread(target=ejecutar_tareas_programadas)
     thread.daemon = True
     thread.start()
