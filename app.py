@@ -11,8 +11,8 @@ import os
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
-# Ruta de la base de datos
-db_path = 'C:/Users/1022966950/Documents/Etiquetas/INTERLAB/interlaboratorios.db'
+db_path = os.path.join(os.path.dirname(__file__), 'interlaboratorios.db')
+
 
 # Crear la base de datos y las tablas si no existen
 def inicializar_base_de_datos():
