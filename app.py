@@ -174,4 +174,6 @@ if __name__ == '__main__':
     thread.daemon = True
     thread.start()
 
-    app.run(debug=True)
+    import os
+    port = int(os.environ.get("PORT", 10000))  # Puerto asignado por Render
+    app.run(host='0.0.0.0', port=port)
