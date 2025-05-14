@@ -11,10 +11,6 @@ import os
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
-
-
-client = Client(twilio_sid, twilio_token)
-
 # Ruta de la base de datos
 db_path = 'C:/Users/1022966950/Documents/Etiquetas/INTERLAB/interlaboratorios.db'
 
