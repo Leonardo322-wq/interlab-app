@@ -120,7 +120,7 @@ def upload_image():
 
 @app.route('/eliminar_celular/<int:id>', methods=['GET'])
 def eliminar_celular(id):
-    conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+    conn = get_connection()
     cursor = conn.cursor()
 
     # Eliminar número de celular de la base de datos
@@ -134,7 +134,7 @@ def eliminar_celular(id):
 @app.route('/cambiar_estado/<int:id>', methods=['POST'])
 def cambiar_estado(id):
     nuevo_estado = request.form['estado']
-    conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+    conn = get_connection()
     cursor = conn.cursor()
 
     # Actualizar el estado del interlaboratorio
@@ -147,7 +147,7 @@ def cambiar_estado(id):
 
 @app.route('/eliminar_interlaboratorio/<int:id>', methods=['GET'])
 def eliminar_interlaboratorio(id):
-    conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+    conn = get_connection()
     cursor = conn.cursor()
 
     # Eliminar interlaboratorio de la base de datos
@@ -163,7 +163,7 @@ def filtrar_interlaboratorios():
     estado = request.form.get('estado', '')
     parametro = request.form.get('parametro', '')
 
-    conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+    conn = get_connection()
     cursor = conn.cursor()
 
     # Filtrar interlaboratorios por los parámetros recibidos
@@ -197,7 +197,7 @@ def ejecutar_tareas_programadas():
 
 inicializar_base_de_datos_postgres()
 if __name__ == '__main__':
-    
+
     thread = threading.Thread(target=ejecutar_tareas_programadas)
     thread.daemon = True
     thread.start()
