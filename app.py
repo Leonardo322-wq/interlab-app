@@ -1,6 +1,5 @@
-
 from flask import Flask, render_template, request, redirect, url_for, flash
-import sqlite3
+import psycopg2
 import time
 import threading
 from datetime import datetime
@@ -8,18 +7,30 @@ import schedule
 import os
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'clave_por_defecto')
 
-db_path = os.path.join(os.path.dirname(__file__), 'interlaboratorios.db')
+# Obtener credenciales de PostgreSQL desde variables de entorno
+DB_HOST = os.environ.get('DB_HOST')
+DB_NAME = os.environ.get('DB_NAME')
+DB_USER = os.environ.get('DB_USER')
+DB_PASSWORD = os.environ.get('DB_PASSWORD')
 
-def inicializar_base_de_datos():
-    if not os.path.exists(db_path):
-        conn = sqlite3.connect(db_path)
+def get_connection():
+    return psycopg2.connect(
+        host=DB_HOST,
+        database=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD
+    )
+
+def inicializar_base_de_datos_postgres():
+    try:
+        conn = get_connection()
         cursor = conn.cursor()
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS interlaboratorios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 nombre TEXT NOT NULL,
                 parametros TEXT,
                 fecha_entrega TEXT,
@@ -27,22 +38,25 @@ def inicializar_base_de_datos():
                 estado TEXT
             )
         ''')
+
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS celulares (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 numero TEXT NOT NULL,
                 observaciones TEXT
             )
         ''')
+
         conn.commit()
+        cursor.close()
         conn.close()
-        print("Base de datos y tablas creadas correctamente.")
-    else:
-        print("La base de datos ya existe.")
+        print("✅ Tablas verificadas/creadas correctamente en PostgreSQL.")
+    except Exception as e:
+        print(f"❌ Error al crear/verificar tablas: {e}")
 
 @app.route('/')
 def index():
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM interlaboratorios")
     interlabs = cursor.fetchall()
@@ -63,11 +77,12 @@ def registrar():
     if not nombre or not fecha_entrega:
         flash("El nombre y la fecha de entrega son obligatorios.")
         return redirect(url_for('index'))
-    conn = sqlite3.connect(db_path)
+
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO interlaboratorios (nombre, parametros, fecha_entrega, analistas, estado)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
     ''', (nombre, parametros, fecha_entrega, analistas, estado))
     conn.commit()
     conn.close()
@@ -81,11 +96,12 @@ def agregar_celular():
     if not numero:
         flash("El número celular es obligatorio.")
         return redirect(url_for('index'))
-    conn = sqlite3.connect(db_path)
+
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO celulares (numero, observaciones)
-        VALUES (?, ?)
+        VALUES (%s, %s)
     ''', (numero, observaciones))
     conn.commit()
     conn.close()
@@ -102,13 +118,85 @@ def upload_image():
         return '✅ Imagen subida correctamente', 200
     return '❌ No se recibió imagen', 400
 
+@app.route('/eliminar_celular/<int:id>', methods=['GET'])
+def eliminar_celular(id):
+    conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+    cursor = conn.cursor()
+
+    # Eliminar número de celular de la base de datos
+    cursor.execute("DELETE FROM celulares WHERE id = %s", (id,))
+    conn.commit()
+    conn.close()
+
+    flash("Número de celular eliminado correctamente.")
+    return redirect(url_for('index'))
+
+@app.route('/cambiar_estado/<int:id>', methods=['POST'])
+def cambiar_estado(id):
+    nuevo_estado = request.form['estado']
+    conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+    cursor = conn.cursor()
+
+    # Actualizar el estado del interlaboratorio
+    cursor.execute("UPDATE interlaboratorios SET estado = %s WHERE id = %s", (nuevo_estado, id))
+    conn.commit()
+    conn.close()
+
+    flash("Estado actualizado correctamente.")
+    return redirect(url_for('index'))
+
+@app.route('/eliminar_interlaboratorio/<int:id>', methods=['GET'])
+def eliminar_interlaboratorio(id):
+    conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+    cursor = conn.cursor()
+
+    # Eliminar interlaboratorio de la base de datos
+    cursor.execute("DELETE FROM interlaboratorios WHERE id = %s", (id,))
+    conn.commit()
+    conn.close()
+
+    flash("Interlaboratorio eliminado correctamente.")
+    return redirect(url_for('index'))
+@app.route('/filtrar', methods=['GET', 'POST'])
+def filtrar_interlaboratorios():
+    nombre = request.form.get('nombre', '')
+    estado = request.form.get('estado', '')
+    parametro = request.form.get('parametro', '')
+
+    conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+    cursor = conn.cursor()
+
+    # Filtrar interlaboratorios por los parámetros recibidos
+    query = "SELECT * FROM interlaboratorios WHERE 1=1"
+    params = []
+
+    if nombre:
+        query += " AND nombre LIKE %s"
+        params.append(f"%{nombre}%")
+    if estado:
+        query += " AND estado LIKE %s"
+        params.append(f"%{estado}%")
+    if parametro:
+        query += " AND parametros LIKE %s"
+        params.append(f"%{parametro}%")
+
+    cursor.execute(query, tuple(params))
+    interlabs = cursor.fetchall()
+    conn.close()
+
+    imagen_ruta = url_for('static', filename='images/macrobalance_image.png')
+    timestamp = datetime.now().timestamp()
+    return render_template('index.html', interlabs=interlabs, imagen_ruta=imagen_ruta, timestamp=timestamp)
+    
+
+
 def ejecutar_tareas_programadas():
     while True:
         schedule.run_pending()
         time.sleep(60)
 
 if __name__ == '__main__':
-    inicializar_base_de_datos()
+    inicializar_base_de_datos_postgres()
     thread = threading.Thread(target=ejecutar_tareas_programadas)
     thread.daemon = True
     thread.start()

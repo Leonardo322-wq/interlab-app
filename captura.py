@@ -4,6 +4,7 @@ import os
 import time
 from datetime import datetime
 import pythoncom
+import requests
 
 def capturar_imagen_excel():
     try:
@@ -34,5 +35,17 @@ def capturar_imagen_excel():
     finally:
         pythoncom.CoUninitialize()
 
+def subir_imagen_a_render():
+    url = "https://interlab-app.onrender.com/upload_image"
+    with open("static/images/macrobalance_image.png", "rb") as img:
+        files = {"image": img}
+        try:
+            response = requests.post(url, files=files)
+            print(response.text)
+        except Exception as e:
+            print("Error al subir imagen:", e)
+
+
 if __name__ == '__main__':
     capturar_imagen_excel()
+    subir_imagen_a_render()
