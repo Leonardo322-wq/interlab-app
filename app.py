@@ -5,6 +5,8 @@ import threading
 from datetime import datetime
 import schedule
 import os
+import requests
+
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'clave_por_defecto')
