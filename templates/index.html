@@ -110,6 +110,10 @@
       {% endfor %}
     </ul>
 
+    <form method="POST" action="{{ url_for('enviar_mensaje_whatsapp') }}">
+      <button class="btn btn-outline-primary mb-3">📤 Enviar WhatsApp desde Coordinador</button>
+    </form>
+
     <h4 class="mt-4">Imagen del Excel Capturada</h4>
     <img src="{{ imagen_ruta }}?t={{ timestamp }}" alt="Imagen generada del Excel" class="img-fluid">
   </div>

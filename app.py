@@ -188,6 +188,21 @@ def filtrar_interlaboratorios():
     timestamp = datetime.now().timestamp()
     return render_template('index.html', interlabs=interlabs, imagen_ruta=imagen_ruta, timestamp=timestamp)
 
+@app.route('/enviar_mensaje_whatsapp', methods=['POST'])
+def enviar_mensaje_whatsapp():
+    try:
+        url_coordinador = "https://ca7f-186-180-6-146.ngrok-free.app/ejecutar_whatsapp"  # ← ngrok URL
+        response = requests.post(url_coordinador, timeout=10)
+
+        if response.status_code == 200:
+            flash("✅ Instrucción enviada al coordinador.")
+        else:
+            flash("⚠️ Falló el envío al coordinador.")
+    except Exception as e:
+        flash(f"❌ Error al contactar al coordinador: {e}")
+
+    return redirect(url_for('index'))
+
 
 
 def ejecutar_tareas_programadas():
