@@ -15,6 +15,9 @@ DB_NAME = os.environ.get('DB_NAME')
 DB_USER = os.environ.get('DB_USER')
 DB_PASSWORD = os.environ.get('DB_PASSWORD')
 
+url_coordinador = ""  # se actualiza desde el coordinador automáticamente
+
+
 def get_connection():
     return psycopg2.connect(
         host=DB_HOST,
@@ -202,6 +205,17 @@ def enviar_mensaje_whatsapp():
         flash(f"❌ Error al contactar al coordinador: {e}")
 
     return redirect(url_for('index'))
+
+@app.route('/actualizar_url_coordinador', methods=['POST'])
+def actualizar_url_coordinador():
+    global url_coordinador
+    url = request.json.get("url")
+    if url:
+        url_coordinador = url
+        print(f"✅ URL del coordinador actualizada: {url}")
+        return {"status": "ok"}, 200
+    return {"error": "URL no proporcionada"}, 400
+
 
 
 
