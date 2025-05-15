@@ -7,7 +7,6 @@ import schedule
 import os
 import requests
 
-
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'clave_por_defecto')
 
@@ -17,7 +16,7 @@ DB_NAME = os.environ.get('DB_NAME')
 DB_USER = os.environ.get('DB_USER')
 DB_PASSWORD = os.environ.get('DB_PASSWORD')
 
-url_coordinador = ""  # se actualiza desde el coordinador automáticamente
+url_coordinador = ""  # Se actualizará vía POST /actualizar_url_coordinador
 
 
 def get_connection():
@@ -27,6 +26,7 @@ def get_connection():
         user=DB_USER,
         password=DB_PASSWORD
     )
+
 
 def inicializar_base_de_datos_postgres():
     try:
@@ -59,6 +59,7 @@ def inicializar_base_de_datos_postgres():
     except Exception as e:
         print(f"❌ Error al crear/verificar tablas: {e}")
 
+
 @app.route('/')
 def index():
     conn = get_connection()
@@ -71,6 +72,7 @@ def index():
     imagen_ruta = url_for('static', filename='images/macrobalance_image.png')
     timestamp = datetime.now().timestamp()
     return render_template('index.html', interlabs=interlabs, celulares=celulares, imagen_ruta=imagen_ruta, timestamp=timestamp)
+
 
 @app.route('/registrar', methods=['POST'])
 def registrar():
@@ -94,6 +96,7 @@ def registrar():
     flash("Interlaboratorio registrado correctamente.")
     return redirect(url_for('index'))
 
+
 @app.route('/agregar_celular', methods=['POST'])
 def agregar_celular():
     numero = request.form['numero']
@@ -113,6 +116,7 @@ def agregar_celular():
     flash("Número celular agregado correctamente.")
     return redirect(url_for('index'))
 
+
 @app.route('/upload_image', methods=['POST'])
 def upload_image():
     image = request.files.get('image')
@@ -123,45 +127,41 @@ def upload_image():
         return '✅ Imagen subida correctamente', 200
     return '❌ No se recibió imagen', 400
 
+
 @app.route('/eliminar_celular/<int:id>', methods=['GET'])
 def eliminar_celular(id):
     conn = get_connection()
     cursor = conn.cursor()
-
-    # Eliminar número de celular de la base de datos
     cursor.execute("DELETE FROM celulares WHERE id = %s", (id,))
     conn.commit()
     conn.close()
-
     flash("Número de celular eliminado correctamente.")
     return redirect(url_for('index'))
+
 
 @app.route('/cambiar_estado/<int:id>', methods=['POST'])
 def cambiar_estado(id):
     nuevo_estado = request.form['estado']
     conn = get_connection()
     cursor = conn.cursor()
-
-    # Actualizar el estado del interlaboratorio
     cursor.execute("UPDATE interlaboratorios SET estado = %s WHERE id = %s", (nuevo_estado, id))
     conn.commit()
     conn.close()
-
     flash("Estado actualizado correctamente.")
     return redirect(url_for('index'))
+
 
 @app.route('/eliminar_interlaboratorio/<int:id>', methods=['GET'])
 def eliminar_interlaboratorio(id):
     conn = get_connection()
     cursor = conn.cursor()
-
-    # Eliminar interlaboratorio de la base de datos
     cursor.execute("DELETE FROM interlaboratorios WHERE id = %s", (id,))
     conn.commit()
     conn.close()
-
     flash("Interlaboratorio eliminado correctamente.")
     return redirect(url_for('index'))
+
+
 @app.route('/filtrar', methods=['GET', 'POST'])
 def filtrar_interlaboratorios():
     nombre = request.form.get('nombre', '')
@@ -171,7 +171,6 @@ def filtrar_interlaboratorios():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Filtrar interlaboratorios por los parámetros recibidos
     query = "SELECT * FROM interlaboratorios WHERE 1=1"
     params = []
 
@@ -193,20 +192,28 @@ def filtrar_interlaboratorios():
     timestamp = datetime.now().timestamp()
     return render_template('index.html', interlabs=interlabs, imagen_ruta=imagen_ruta, timestamp=timestamp)
 
+
 @app.route('/enviar_mensaje_whatsapp', methods=['POST'])
 def enviar_mensaje_whatsapp():
+    global url_coordinador
+    if not url_coordinador:
+        flash("❌ La URL del coordinador no está configurada.")
+        return redirect(url_for('index'))
+
     try:
-        url_coordinador = "https://ca7f-186-180-6-146.ngrok-free.app/ejecutar_whatsapp"  # ← ngrok URL
-        response = requests.post(url_coordinador, timeout=10)
+        print(f"Intentando enviar petición POST a coordinador en: {url_coordinador}")
+        response = requests.post(url_coordinador, timeout=15)
+        print(f"Código respuesta: {response.status_code} - Contenido: {response.text}")
 
         if response.status_code == 200:
             flash("✅ Instrucción enviada al coordinador.")
         else:
-            flash("⚠️ Falló el envío al coordinador.")
+            flash(f"⚠️ Falló el envío al coordinador. Código: {response.status_code}")
     except Exception as e:
         flash(f"❌ Error al contactar al coordinador: {e}")
 
     return redirect(url_for('index'))
+
 
 @app.route('/actualizar_url_coordinador', methods=['POST'])
 def actualizar_url_coordinador():
@@ -219,16 +226,15 @@ def actualizar_url_coordinador():
     return {"error": "URL no proporcionada"}, 400
 
 
-
-
 def ejecutar_tareas_programadas():
     while True:
         schedule.run_pending()
         time.sleep(60)
 
-inicializar_base_de_datos_postgres()
-if __name__ == '__main__':
 
+inicializar_base_de_datos_postgres()
+
+if __name__ == '__main__':
     thread = threading.Thread(target=ejecutar_tareas_programadas)
     thread.daemon = True
     thread.start()
