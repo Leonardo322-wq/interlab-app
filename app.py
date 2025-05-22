@@ -6,18 +6,28 @@ from datetime import datetime
 import schedule
 import os
 import requests
+import cloudinary
+import cloudinary.uploader
 
+# Configuración de Flask
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'clave_por_defecto')
 
-# Obtener credenciales de PostgreSQL desde variables de entorno
+# Configurar conexión a PostgreSQL
 DB_HOST = os.environ.get('DB_HOST')
 DB_NAME = os.environ.get('DB_NAME')
 DB_USER = os.environ.get('DB_USER')
 DB_PASSWORD = os.environ.get('DB_PASSWORD')
 
-url_coordinador = ""  # Se actualizará vía POST /actualizar_url_coordinador
+# Configurar Cloudinary
+cloudinary.config(
+    cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
+    api_key=os.environ.get('CLOUDINARY_API_KEY'),
+    api_secret=os.environ.get('CLOUDINARY_API_SECRET')
+)
 
+# URL del coordinador
+url_coordinador = ""
 
 def get_connection():
     return psycopg2.connect(
@@ -27,12 +37,10 @@ def get_connection():
         password=DB_PASSWORD
     )
 
-
 def inicializar_base_de_datos_postgres():
     try:
         conn = get_connection()
         cursor = conn.cursor()
-
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS interlaboratorios (
                 id SERIAL PRIMARY KEY,
@@ -43,7 +51,6 @@ def inicializar_base_de_datos_postgres():
                 estado TEXT
             )
         ''')
-
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS celulares (
                 id SERIAL PRIMARY KEY,
@@ -51,14 +58,12 @@ def inicializar_base_de_datos_postgres():
                 observaciones TEXT
             )
         ''')
-
         conn.commit()
         cursor.close()
         conn.close()
         print("✅ Tablas verificadas/creadas correctamente en PostgreSQL.")
     except Exception as e:
         print(f"❌ Error al crear/verificar tablas: {e}")
-
 
 @app.route('/')
 def index():
@@ -69,10 +74,12 @@ def index():
     cursor.execute("SELECT * FROM celulares")
     celulares = cursor.fetchall()
     conn.close()
-    imagen_ruta = url_for('static', filename='images/macrobalance_image.png')
+
+    imagen_ruta = "https://res.cloudinary.com/{}/image/upload/v1/macrobalance_image.png".format(
+        os.environ.get('CLOUDINARY_CLOUD_NAME')
+    )
     timestamp = datetime.now().timestamp()
     return render_template('index.html', interlabs=interlabs, celulares=celulares, imagen_ruta=imagen_ruta, timestamp=timestamp)
-
 
 @app.route('/registrar', methods=['POST'])
 def registrar():
@@ -96,7 +103,6 @@ def registrar():
     flash("Interlaboratorio registrado correctamente.")
     return redirect(url_for('index'))
 
-
 @app.route('/agregar_celular', methods=['POST'])
 def agregar_celular():
     numero = request.form['numero']
@@ -116,17 +122,19 @@ def agregar_celular():
     flash("Número celular agregado correctamente.")
     return redirect(url_for('index'))
 
-
 @app.route('/upload_image', methods=['POST'])
 def upload_image():
     image = request.files.get('image')
     if image:
-        ruta_destino = os.path.join('static', 'images', 'macrobalance_image.png')
-        image.save(ruta_destino)
-        print(f"Imagen guardada en: {ruta_destino}")
-        return '✅ Imagen subida correctamente', 200
+        try:
+            upload_result = cloudinary.uploader.upload(image, public_id="macrobalance_image", overwrite=True)
+            url = upload_result.get('secure_url')
+            print(f"✅ Imagen subida a Cloudinary: {url}")
+            return url, 200
+        except Exception as e:
+            print("❌ Error al subir la imagen a Cloudinary:", e)
+            return '❌ Error al subir imagen', 500
     return '❌ No se recibió imagen', 400
-
 
 @app.route('/eliminar_celular/<int:id>', methods=['GET'])
 def eliminar_celular(id):
@@ -137,7 +145,6 @@ def eliminar_celular(id):
     conn.close()
     flash("Número de celular eliminado correctamente.")
     return redirect(url_for('index'))
-
 
 @app.route('/cambiar_estado/<int:id>', methods=['POST'])
 def cambiar_estado(id):
@@ -150,7 +157,6 @@ def cambiar_estado(id):
     flash("Estado actualizado correctamente.")
     return redirect(url_for('index'))
 
-
 @app.route('/eliminar_interlaboratorio/<int:id>', methods=['GET'])
 def eliminar_interlaboratorio(id):
     conn = get_connection()
@@ -160,7 +166,6 @@ def eliminar_interlaboratorio(id):
     conn.close()
     flash("Interlaboratorio eliminado correctamente.")
     return redirect(url_for('index'))
-
 
 @app.route('/filtrar', methods=['GET', 'POST'])
 def filtrar_interlaboratorios():
@@ -188,10 +193,11 @@ def filtrar_interlaboratorios():
     interlabs = cursor.fetchall()
     conn.close()
 
-    imagen_ruta = url_for('static', filename='images/macrobalance_image.png')
+    imagen_ruta = "https://res.cloudinary.com/{}/image/upload/v1/macrobalance_image.png".format(
+        os.environ.get('CLOUDINARY_CLOUD_NAME')
+    )
     timestamp = datetime.now().timestamp()
     return render_template('index.html', interlabs=interlabs, imagen_ruta=imagen_ruta, timestamp=timestamp)
-
 
 @app.route('/enviar_mensaje_whatsapp', methods=['POST'])
 def enviar_mensaje_whatsapp():
@@ -214,6 +220,21 @@ def enviar_mensaje_whatsapp():
 
     return redirect(url_for('index'))
 
+@app.route('/actualizar_observacion/<int:id>', methods=['POST'])
+def actualizar_observacion(id):
+    nuevo_nombre = request.form.get('observaciones')
+    if not nuevo_nombre:
+        flash("Debe ingresar un nombre.")
+        return redirect(url_for('index'))
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE celulares SET observaciones = %s WHERE id = %s", (nuevo_nombre, id))
+    conn.commit()
+    conn.close()
+    flash("Observación actualizada correctamente.")
+    return redirect(url_for('index'))
+    
 
 @app.route('/actualizar_url_coordinador', methods=['POST'])
 def actualizar_url_coordinador():
@@ -225,12 +246,10 @@ def actualizar_url_coordinador():
         return {"status": "ok"}, 200
     return {"error": "URL no proporcionada"}, 400
 
-
 def ejecutar_tareas_programadas():
     while True:
         schedule.run_pending()
         time.sleep(60)
-
 
 inicializar_base_de_datos_postgres()
 

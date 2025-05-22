@@ -47,13 +47,16 @@ def enviar_notificacion():
 
         fecha_actual = datetime.now().date()
         mensaje_completo = "📢 *Recordatorio de interlaboratorios pendientes:*\n\n"
+        hay_pendientes = False
 
         for nombre, fecha_str in interlabs:
             fecha_entrega = datetime.strptime(fecha_str, "%Y-%m-%d").date()
             if fecha_entrega >= fecha_actual:
                 mensaje_completo += f"🔸 {nombre}, fecha de entrega: {fecha_entrega.strftime('%d/%m/%Y')}\n"
+                hay_pendientes = True
 
-        if mensaje_completo != "📢 *Recordatorio de interlaboratorios pendientes:*\n\n":
+        if hay_pendientes:
+            mensaje_completo += "\n📎 Si deseas ver toda la información accede a: https://interlab-app.onrender.com"
             for (numero_celular,) in celulares:
                 if numero_celular:
                     enviar_por_whatsapp(numero_celular, mensaje_completo)
