@@ -1,23 +1,26 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
-import psycopg2
-import time
-import threading
 from datetime import datetime
-import schedule
 import os
 import requests
 import cloudinary
 import cloudinary.uploader
+from supabase import create_client, Client
+from dotenv import load_dotenv
+load_dotenv(dotenv_path='datos.env')
+
 
 # Configuración de Flask
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'clave_por_defecto')
 
-# Configurar conexión a PostgreSQL
-DB_HOST = os.environ.get('DB_HOST')
-DB_NAME = os.environ.get('DB_NAME')
-DB_USER = os.environ.get('DB_USER')
-DB_PASSWORD = os.environ.get('DB_PASSWORD')
+# Inicializar Supabase
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError("SUPABASE_URL y SUPABASE_KEY deben estar definidos")
+
 
 # Configurar Cloudinary
 cloudinary.config(
@@ -29,77 +32,33 @@ cloudinary.config(
 # URL del coordinador
 url_coordinador = ""
 
-def get_connection():
-    return psycopg2.connect(
-        host=DB_HOST,
-        database=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD
-    )
-
-def inicializar_base_de_datos_postgres():
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS interlaboratorios (
-                id SERIAL PRIMARY KEY,
-                nombre TEXT NOT NULL,
-                parametros TEXT,
-                fecha_entrega TEXT,
-                analistas TEXT,
-                estado TEXT
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS celulares (
-                id SERIAL PRIMARY KEY,
-                numero TEXT NOT NULL,
-                observaciones TEXT
-            )
-        ''')
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print("✅ Tablas verificadas/creadas correctamente en PostgreSQL.")
-    except Exception as e:
-        print(f"❌ Error al crear/verificar tablas: {e}")
-
 @app.route('/')
 def index():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM interlaboratorios")
-    interlabs = cursor.fetchall()
-    cursor.execute("SELECT * FROM celulares")
-    celulares = cursor.fetchall()
-    conn.close()
+    interlabs = supabase.table('interlaboratorios').select("*").execute().data
+    celulares = supabase.table('celulares').select("*").execute().data
 
-    imagen_ruta = "https://res.cloudinary.com/{}/image/upload/v1/macrobalance_image.png".format(
-        os.environ.get('CLOUDINARY_CLOUD_NAME')
-    )
+    resultado = supabase.table("imagenes_generadas").select("url").order("fecha", desc=True).limit(1).execute()
+    imagen_ruta = resultado.data[0]['url'] if resultado.data else ''
+
     timestamp = datetime.now().timestamp()
+
     return render_template('index.html', interlabs=interlabs, celulares=celulares, imagen_ruta=imagen_ruta, timestamp=timestamp)
 
 @app.route('/registrar', methods=['POST'])
 def registrar():
-    nombre = request.form['nombre']
-    parametros = request.form['parametros']
-    fecha_entrega = request.form['fecha_entrega']
-    analistas = request.form['analistas']
-    estado = request.form['estado']
-    if not nombre or not fecha_entrega:
+    data = {
+        "nombre": request.form['nombre'],
+        "parametros": request.form['parametros'],
+        "fecha_entrega": request.form['fecha_entrega'],
+        "analistas": request.form['analistas'],
+        "estado": request.form['estado']
+    }
+
+    if not data['nombre'] or not data['fecha_entrega']:
         flash("El nombre y la fecha de entrega son obligatorios.")
         return redirect(url_for('index'))
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO interlaboratorios (nombre, parametros, fecha_entrega, analistas, estado)
-        VALUES (%s, %s, %s, %s, %s)
-    ''', (nombre, parametros, fecha_entrega, analistas, estado))
-    conn.commit()
-    conn.close()
+    supabase.table('interlaboratorios').insert(data).execute()
     flash("Interlaboratorio registrado correctamente.")
     return redirect(url_for('index'))
 
@@ -107,18 +66,13 @@ def registrar():
 def agregar_celular():
     numero = request.form['numero']
     observaciones = request.form['observaciones']
+
     if not numero:
         flash("El número celular es obligatorio.")
         return redirect(url_for('index'))
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO celulares (numero, observaciones)
-        VALUES (%s, %s)
-    ''', (numero, observaciones))
-    conn.commit()
-    conn.close()
+    data = {"numero": numero, "observaciones": observaciones}
+    supabase.table('celulares').insert(data).execute()
     flash("Número celular agregado correctamente.")
     return redirect(url_for('index'))
 
@@ -138,66 +92,46 @@ def upload_image():
 
 @app.route('/eliminar_celular/<int:id>', methods=['GET'])
 def eliminar_celular(id):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM celulares WHERE id = %s", (id,))
-    conn.commit()
-    conn.close()
+    supabase.table('celulares').delete().eq('id', id).execute()
     flash("Número de celular eliminado correctamente.")
     return redirect(url_for('index'))
 
 @app.route('/cambiar_estado/<int:id>', methods=['POST'])
 def cambiar_estado(id):
     nuevo_estado = request.form['estado']
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE interlaboratorios SET estado = %s WHERE id = %s", (nuevo_estado, id))
-    conn.commit()
-    conn.close()
+    supabase.table('interlaboratorios').update({"estado": nuevo_estado}).eq('id', id).execute()
     flash("Estado actualizado correctamente.")
     return redirect(url_for('index'))
 
 @app.route('/eliminar_interlaboratorio/<int:id>', methods=['GET'])
 def eliminar_interlaboratorio(id):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM interlaboratorios WHERE id = %s", (id,))
-    conn.commit()
-    conn.close()
+    supabase.table('interlaboratorios').delete().eq('id', id).execute()
     flash("Interlaboratorio eliminado correctamente.")
     return redirect(url_for('index'))
 
-@app.route('/filtrar', methods=['GET', 'POST'])
+@app.route('/filtrar', methods=['POST'])
 def filtrar_interlaboratorios():
     nombre = request.form.get('nombre', '')
     estado = request.form.get('estado', '')
     parametro = request.form.get('parametro', '')
 
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    query = "SELECT * FROM interlaboratorios WHERE 1=1"
-    params = []
-
+    query = supabase.table('interlaboratorios').select('*')
     if nombre:
-        query += " AND nombre LIKE %s"
-        params.append(f"%{nombre}%")
+        query = query.ilike('nombre', f'%{nombre}%')
     if estado:
-        query += " AND estado LIKE %s"
-        params.append(f"%{estado}%")
+        query = query.ilike('estado', f'%{estado}%')
     if parametro:
-        query += " AND parametros LIKE %s"
-        params.append(f"%{parametro}%")
+        query = query.ilike('parametros', f'%{parametro}%')
 
-    cursor.execute(query, tuple(params))
-    interlabs = cursor.fetchall()
-    conn.close()
+    interlabs = query.execute().data
+    celulares = supabase.table('celulares').select('*').execute().data
 
-    imagen_ruta = "https://res.cloudinary.com/{}/image/upload/v1/macrobalance_image.png".format(
-        os.environ.get('CLOUDINARY_CLOUD_NAME')
-    )
+    resultado = supabase.table("imagenes_generadas").select("url").order("fecha", desc=True).limit(1).execute()
+    imagen_ruta = resultado.data[0]['url'] if resultado.data else ''
+
     timestamp = datetime.now().timestamp()
-    return render_template('index.html', interlabs=interlabs, imagen_ruta=imagen_ruta, timestamp=timestamp)
+
+    return render_template('index.html', interlabs=interlabs, celulares=celulares, imagen_ruta=imagen_ruta, timestamp=timestamp)
 
 @app.route('/enviar_mensaje_whatsapp', methods=['POST'])
 def enviar_mensaje_whatsapp():
@@ -222,19 +156,14 @@ def enviar_mensaje_whatsapp():
 
 @app.route('/actualizar_observacion/<int:id>', methods=['POST'])
 def actualizar_observacion(id):
-    nuevo_nombre = request.form.get('observaciones')
-    if not nuevo_nombre:
-        flash("Debe ingresar un nombre.")
+    observaciones = request.form.get('observaciones')
+    if not observaciones:
+        flash("Debe ingresar una observación.")
         return redirect(url_for('index'))
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE celulares SET observaciones = %s WHERE id = %s", (nuevo_nombre, id))
-    conn.commit()
-    conn.close()
+    supabase.table('celulares').update({'observaciones': observaciones}).eq('id', id).execute()
     flash("Observación actualizada correctamente.")
     return redirect(url_for('index'))
-    
 
 @app.route('/actualizar_url_coordinador', methods=['POST'])
 def actualizar_url_coordinador():
@@ -246,16 +175,6 @@ def actualizar_url_coordinador():
         return {"status": "ok"}, 200
     return {"error": "URL no proporcionada"}, 400
 
-def ejecutar_tareas_programadas():
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
-
-inicializar_base_de_datos_postgres()
-
 if __name__ == '__main__':
-    thread = threading.Thread(target=ejecutar_tareas_programadas)
-    thread.daemon = True
-    thread.start()
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)

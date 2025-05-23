@@ -76,23 +76,22 @@
       <tbody>
         {% for i in interlabs %}
         <tr>
-          <td>{{ i[1] }}</td>
-          <td>{{ i[2] }}</td>
-          <td>{{ i[3] }}</td>
-          <td>{{ i[4] }}</td>
+          <td>{{ i.nombre }}</td>
+          <td>{{ i.parametros }}</td>
+          <td>{{ i.fecha_entrega }}</td>
+          <td>{{ i.analistas }}</td>
           <td>
             <!-- Cambio de estado -->
-            <form method="POST" action="{{ url_for('cambiar_estado', id=i[0]) }}">
+            <form method="POST" action="{{ url_for('cambiar_estado', id=i.id) }}">
               <select class="form-control" name="estado">
-                <option value="Sin reportar" {% if i[5] == 'Sin reportar' %}selected{% endif %}>Sin reportar</option>
-                <option value="Reportado" {% if i[5] == 'Reportado' %}selected{% endif %}>Reportado</option>
+                <option value="Sin reportar" {% if i.estado == 'Sin reportar' %}selected{% endif %}>Sin reportar</option>
+                <option value="Reportado" {% if i.estado == 'Reportado' %}selected{% endif %}>Reportado</option>
               </select>
               <button class="btn btn-warning mt-2">Cambiar Estado</button>
             </form>
           </td>
           <td>
-            <!-- Eliminar interlaboratorio -->
-            <a href="{{ url_for('eliminar_interlaboratorio', id=i[0]) }}" class="btn btn-danger">Eliminar</a>
+            <a href="{{ url_for('eliminar_interlaboratorio', id=i.id) }}" class="btn btn-danger">Eliminar</a>
           </td>
         </tr>
         {% endfor %}
@@ -100,26 +99,24 @@
     </table>
 
     <!-- Números celulares -->
-
     <h4 class="mt-4">Números celulares</h4>
     <ul>
      {% for c in celulares %}
        <li>
-         {{ c[1] }}
-         {% if c[2] %}
-           - {{ c[2] }}
+         {{ c.numero }}
+         {% if c.observaciones %}
+           - {{ c.observaciones }}
          {% else %}
-           <button class="btn btn-sm btn-outline-primary" onclick="mostrarFormulario({{ c[0] }})">+</button>
-           <form id="form-{{ c[0] }}" class="d-none d-inline" method="POST" action="{{ url_for('actualizar_observacion', id=c[0]) }}">
+           <button class="btn btn-sm btn-outline-primary" onclick="mostrarFormulario({{ c.id }})">+</button>
+           <form id="form-{{ c.id }}" class="d-none d-inline" method="POST" action="{{ url_for('actualizar_observacion', id=c.id) }}">
              <input type="text" name="observaciones" placeholder="Nombre" class="form-control form-control-sm d-inline w-auto" required>
              <button type="submit" class="btn btn-sm btn-success">Guardar</button>
            </form>
          {% endif %}
-         <a href="{{ url_for('eliminar_celular', id=c[0]) }}" class="btn btn-danger btn-sm ml-2">Eliminar</a>
+         <a href="{{ url_for('eliminar_celular', id=c.id) }}" class="btn btn-danger btn-sm ml-2">Eliminar</a>
        </li>
      {% endfor %}
     </ul>
-
 
     <form method="POST" action="{{ url_for('enviar_mensaje_whatsapp') }}">
       <button class="btn btn-outline-primary mb-3">📤 Enviar WhatsApp desde Server</button>
@@ -130,15 +127,12 @@
   </div>
 
   <!-- Scripts de Bootstrap -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Mostrar formulario inline para observaciones -->
-    <script>
-      function mostrarFormulario(id) {
-        document.getElementById('form-' + id).classList.remove('d-none');
-      }
-    </script>
-
-
+  <script>
+    function mostrarFormulario(id) {
+      document.getElementById('form-' + id).classList.remove('d-none');
+    }
+  </script>
 </body>
 </html>
